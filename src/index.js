@@ -1,12 +1,12 @@
 const { getManagedDevices, generateExcelReport, sendEmailWithAttachment } = require('./deviceManager');
-const { getAccessToken } = require('./graphClient');
+const { getToken  } = require('./auth');
 
 const main = async () => {
     try {
         console.log("🚀 Iniciando el BOT de gestión de dispositivos...");
 
         // Obtener el token de autenticación
-        const token = await getAccessToken();
+        const token = await getToken();
         if (!token) {
             throw new Error("❌ No se pudo obtener el token de autenticación.");
         }

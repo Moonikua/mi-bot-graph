@@ -11,9 +11,9 @@ const deviceAppsList = [];
 /**
  * Obtiene la lista de dispositivos gestionados y procesa el estado de cumplimiento.
  */
-const getManagedDevices = async () => {
+const getManagedDevices = async (token) => {
     try {
-        const data = await graphRequest('/deviceManagement/managedDevices');
+        const data = await graphRequest('/deviceManagement/managedDevices', token);
         console.log('✅ Dispositivos gestionados obtenidos con éxito:');
         
         const devices = data.value;
@@ -38,7 +38,7 @@ const getManagedDevices = async () => {
         
         // Iterar sobre los dispositivos para obtener más información
         for (const device of devices) {
-            await getDeviceDetails(device.id, device.operatingSystem);
+            await getDeviceDetails(device.id, device.operatingSystem, token);
         }
         
         return { complianceSummary, deviceDetailsList, deviceAppsList };
@@ -50,9 +50,9 @@ const getManagedDevices = async () => {
 /**
  * Obtiene detalles de un dispositivo y, si es iOS, obtiene sus aplicaciones.
  */
-const getDeviceDetails = async (deviceId, operatingSystem) => {
+const getDeviceDetails = async (deviceId, operatingSystem, token) => {
     try {
-        const deviceData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}`);
+        const deviceData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}`, token);
         console.log(`📌 Información del dispositivo ${deviceId}:`, deviceData);
         
         // Guardar detalles en lista
@@ -60,7 +60,7 @@ const getDeviceDetails = async (deviceId, operatingSystem) => {
 
         // Si el dispositivo es iOS, obtener aplicaciones
         if (operatingSystem.toLowerCase() === 'ios') {
-            await getDeviceApps(deviceId);
+            await getDeviceApps(deviceId, token);
         }
     } catch (error) {
         console.error(`❌ Error obteniendo detalles del dispositivo ${deviceId}:`, error);
@@ -70,9 +70,9 @@ const getDeviceDetails = async (deviceId, operatingSystem) => {
 /**
  * Obtiene las aplicaciones instaladas en un dispositivo iOS.
  */
-const getDeviceApps = async (deviceId) => {
+const getDeviceApps = async (deviceId, token) => {
     try {
-        const appsData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}/detectedApps`);
+        const appsData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}/detectedApps`, token);
         console.log(`📱 Aplicaciones detectadas en iOS (${deviceId}):`, appsData.value);
         
         // Guardar datos en lista
