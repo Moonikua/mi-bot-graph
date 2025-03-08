@@ -1,10 +1,11 @@
 const axios = require('axios');
-require('dotenv').config();
+const config = require('../config');
 
 const getToken = async () => {
-    const tenantId = process.env.TENANT_ID;
-    const clientId = process.env.CLIENT_ID;
-    const clientSecret = process.env.CLIENT_SECRET;
+
+    const tenantId = config.TENANT_ID;
+    const clientId = config.CLIENT_ID;
+    const clientSecret = config.CLIENT_SECRET;
 
     const url = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
     

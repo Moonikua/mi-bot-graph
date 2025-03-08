@@ -2,17 +2,28 @@ const { graphRequest } = require('./graphClient');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
+const config = require('../config');
 
-// Almacenar resultados en memoria
 const complianceSummary = {};
 const deviceDetailsList = [];
 const deviceAppsList = [];
 
-/**
- * Obtiene la lista de dispositivos gestionados y procesa el estado de cumplimiento.
- */
+// Obtener la fecha y hora actual para el log
+const getCurrentTimestamp = () => {
+    return new Date().toISOString().replace('T', ' ').substring(0, 19);
+};
+
+console.log(`🕒 Inicio del bot: ${getCurrentTimestamp()}`);
+if (!fs.existsSync(config.TEMP_DIR)) {
+    fs.mkdirSync(config.TEMP_DIR);
+}
+
+// Almacenar resultados en memoria
+
+/** Obtiene la lista de dispositivos gestionados y procesa el estado de cumplimiento. */
 const getManagedDevices = async (token) => {
     try {
+        console.log(`📡 Consultando dispositivos gestionados... (${getCurrentTimestamp()})`);
         const data = await graphRequest('/deviceManagement/managedDevices', token);
         console.log('✅ Dispositivos gestionados obtenidos con éxito:');
         
@@ -43,9 +54,10 @@ const getManagedDevices = async (token) => {
         
         return { complianceSummary, deviceDetailsList, deviceAppsList };
     } catch (error) {
-        console.error('❌ Error obteniendo dispositivos gestionados:', error);
+        console.error(`❌ Error obteniendo dispositivos gestionados (${getCurrentTimestamp()}):`, error);
     }
 };
+
 
 /**
  * Obtiene detalles de un dispositivo y, si es iOS, obtiene sus aplicaciones.
@@ -85,7 +97,7 @@ const getDeviceApps = async (deviceId, token) => {
 /**
  * Genera y guarda un archivo Excel con la información procesada.
  */
-const generateExcelReport = async (filePath = 'managed_devices_report.xlsx') => {
+const generateExcelReport = async (filePath = `${config.TEMP_DIR}/${config.REPORT_FILENAME}`) => {
     try {
         const workbook = new ExcelJS.Workbook();
 
@@ -131,37 +143,47 @@ const generateExcelReport = async (filePath = 'managed_devices_report.xlsx') => 
 };
 
 /**
- * Envía el archivo Excel generado por correo electrónico.
+ * Envía el archivo Excel generado por correo electrónico y lo elimina después.
  */
-const sendEmailWithAttachment = async (recipientEmail) => {
+const config = require('../config');
+const nodemailer = require('nodemailer');
+const fs = require('fs');
+
+const sendEmailWithAttachment = async (recipientEmail = config.EMAIL_RECIPIENT) => {
     try {
         const filePath = await generateExcelReport();
+
+        // Configuración del transporte SMTP
         let transporter = nodemailer.createTransport({
-            service: 'gmail',
+            host: config.SMTP_HOST,
+            port: config.SMTP_PORT,
+            secure: config.SMTP_SECURE, // true para 465, false para otros
             auth: {
-                user: 'tu_correo@gmail.com', // Reemplazar con el correo emisor
-                pass: 'tu_contraseña' // Reemplazar con la contraseña o app password
+                user: config.SMTP_USER,
+                pass: config.SMTP_PASSWORD
             }
         });
 
         let mailOptions = {
-            from: 'tu_correo@gmail.com',
+            from: config.EMAIL_SENDER,
             to: recipientEmail,
-            subject: 'Reporte de Dispositivos Gestionados',
+            subject: '📊 Reporte de Dispositivos Gestionados',
             text: 'Adjunto encontrarás el reporte en formato Excel.',
             attachments: [
-                {
-                    filename: 'managed_devices_report.xlsx',
-                    path: filePath
-                }
+                { filename: config.REPORT_FILENAME, path: filePath }
             ]
         };
 
         let info = await transporter.sendMail(mailOptions);
-        console.log('📧 Email enviado:', info.response);
+        console.log(`📧 Email enviado con éxito a ${recipientEmail}:`, info.response);
+
+        // Eliminar el archivo después del envío
+        fs.unlinkSync(filePath);
+        console.log(`🗑️ Archivo eliminado: ${filePath}`);
     } catch (error) {
         console.error('❌ Error enviando el correo:', error);
     }
 };
+
 
 module.exports = { getManagedDevices, generateExcelReport, sendEmailWithAttachment, complianceSummary, deviceDetailsList, deviceAppsList };
