@@ -5,7 +5,7 @@ const graphRequest = async (endpoint) => {
     const token = await getToken();
 
     try {
-        const response = await axios.get(`https://graph.microsoft.com/v1.0${endpoint}`, {
+        const response = await axios.get(`https://graph.microsoft.com/beta${endpoint}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         return response.data;
