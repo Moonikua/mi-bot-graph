@@ -1,8 +1,8 @@
 const axios = require('axios');
-const { getToken } = require('./auth');
+const { getAccessToken } = require('./auth');
 
 const graphRequest = async (endpoint) => {
-    const token = await getToken();
+    const token = await getAccessToken();
 
     try {
         const response = await axios.get(`https://graph.microsoft.com/beta${endpoint}`, {
