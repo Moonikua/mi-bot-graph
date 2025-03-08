@@ -16,6 +16,7 @@ const runBot = async () => {
         if (!token) {
             throw new Error("❌ No se pudo obtener el token de autenticación.");
         }
+
         console.log("🔑 Token obtenido con éxito.");
 
         // Obtener dispositivos y procesar datos
@@ -34,7 +35,7 @@ const runBot = async () => {
     }
 };
 // Ejecutar el bot inmediatamente al iniciar
-//runBot();
+runBot();
 
 // Configuración de cron para ejecutar revisar config
 // const config = require('./config');

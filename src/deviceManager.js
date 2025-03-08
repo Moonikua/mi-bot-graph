@@ -142,13 +142,6 @@ const generateExcelReport = async (filePath = `${config.TEMP_DIR}/${config.REPOR
     }
 };
 
-/**
- * Envía el archivo Excel generado por correo electrónico y lo elimina después.
- */
-const config = require('../config');
-const nodemailer = require('nodemailer');
-const fs = require('fs');
-
 const sendEmailWithAttachment = async (recipientEmail = config.EMAIL_RECIPIENT) => {
     try {
         const filePath = await generateExcelReport();
