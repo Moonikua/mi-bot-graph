@@ -56,7 +56,7 @@ const getManagedDevices = async (token) => {
     } catch (error) {
         console.error(`❌ Error obteniendo dispositivos gestionados (${getCurrentTimestamp()}):`, error);
     }
-};
+ };
 
 
 /**
@@ -88,6 +88,7 @@ const getDeviceApps = async (deviceId, token) => {
         console.log(`📱 Aplicaciones detectadas en iOS (${deviceId}):`, appsData.value);
         
         // Guardar datos en lista
+        // LOGICA CON WHITE LIST
         deviceAppsList.push({ deviceId, apps: appsData.value });
     } catch (error) {
         console.error(`❌ Error obteniendo aplicaciones del dispositivo ${deviceId}:`, error);

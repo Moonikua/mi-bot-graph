@@ -1,6 +1,7 @@
 const { getManagedDevices, generateExcelReport, sendEmailWithAttachment } = require('./deviceManager');
 const { getToken } = require('./auth');
 const cron = require('cron').CronJob;
+const config = require('../config');
 
 const getCurrentTimestamp = () => {
     return new Date().toISOString().replace('T', ' ').substring(0, 19);
@@ -40,10 +41,10 @@ runBot();
 // Configuración de cron para ejecutar revisar config
 // const config = require('./config');
 
-// new cron(
-//     config.CRON_SCHEDULE,
-//     async () => {
-//         await runBot();
-//     },
-//     null, true, config.TIMEZONE
-// ).start();
+new cron(
+    config.CRON_SCHEDULE,
+    async () => {
+        await runBot();
+    },
+    null, true, config.TIMEZONE
+).start();
