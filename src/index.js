@@ -4,8 +4,9 @@ const cron = require('cron').CronJob;
 const config = require('../config');
 
 const getCurrentTimestamp = () => {
-    return new Date().toISOString().replace('T', ' ').substring(0, 19);
+    return new Date().toLocaleString("es-CL", { timeZone: "America/Santiago" }).replace(',', '');
 };
+
 
 const runBot = async () => {
     try {
@@ -24,10 +25,10 @@ const runBot = async () => {
         await getManagedDevices(token);
 
         // Generar el archivo Excel
-        const filePath = await generateExcelReport();
+        //const filePath = await generateExcelReport();
 
         // Enviar el archivo por correo (Reemplaza con el correo destinatario)
-        await sendEmailWithAttachment('destinatario@email.com');
+        await sendEmailWithAttachment();
         
         console.log(`🕒 Termino del bot: ${getCurrentTimestamp()}`);
         console.log("✅ Proceso completado exitosamente.");
@@ -41,10 +42,10 @@ runBot();
 // Configuración de cron para ejecutar revisar config
 // const config = require('./config');
 
-new cron(
-    config.CRON_SCHEDULE,
-    async () => {
-        await runBot();
-    },
-    null, true, config.TIMEZONE
-).start();
+// new cron(
+//     config.CRON_SCHEDULE,
+//     async () => {
+//         await runBot();
+//     },
+//     null, true, config.TIMEZONE
+// ).start();

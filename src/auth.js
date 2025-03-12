@@ -16,19 +16,13 @@ const getToken = async () => {
 
     try {
         console.log("📡 Enviando solicitud para obtener token...");
-        console.log("🔗 URL:", url);
-        console.log("📌 Parámetros:", params.toString());
+        
 
         const response = await axios.post(url, params, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 
         let token = response.data.access_token.trim(); // 🔹 Eliminamos espacios en blanco o comillas accidentales
-
-        console.log("✅ Token obtenido con éxito.");
-        console.log("🔍 Tipo de token:", typeof token);
-        console.log("🔍 Token recibido:", token);
-
         return token;
     } catch (error) {
         console.error('❌ Error obteniendo el token:', error.response?.data || error);

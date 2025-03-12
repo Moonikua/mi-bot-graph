@@ -10,8 +10,9 @@ const deviceAppsList = [];
 
 // Obtener la fecha y hora actual para el log
 const getCurrentTimestamp = () => {
-    return new Date().toISOString().replace('T', ' ').substring(0, 19);
+    return new Date().toLocaleString("es-CL", { timeZone: "America/Santiago" }).replace(',', '');
 };
+
 
 console.log(`🕒 Inicio del bot: ${getCurrentTimestamp()}`);
 if (!fs.existsSync(config.TEMP_DIR)) {
@@ -43,10 +44,7 @@ const getManagedDevices = async (token) => {
                 complianceSummary[userPrincipalName].noncompliant += 1;
             }
         }
-        
-        console.log("📊 Resumen de Compliance por Usuario:", complianceSummary);
-        console.log("📥 Dispositivos obtenidos, iniciando consulta de detalles...");
-        
+                
         // Iterar sobre los dispositivos para obtener más información
         for (const device of devices) {
             await getDeviceDetails(device.id, device.operatingSystem, token);
@@ -62,45 +60,79 @@ const getManagedDevices = async (token) => {
 /**
  * Obtiene detalles de un dispositivo y, si es iOS, obtiene sus aplicaciones.
  */
-const getDeviceDetails = async (deviceId, operatingSystem, token) => {
+const getDeviceDetails = async (deviceId, operatingSystem,token) => {
     try {
-        const deviceData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}`, token);
-        console.log(`📌 Información del dispositivo ${deviceId}:`, deviceData);
-        
-        // Guardar detalles en lista
-        deviceDetailsList.push(deviceData);
+        // Primera petición: Obtener detalles generales del dispositivo
+        const deviceData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}`,token);
+
+        // Inicializar datos del dispositivo con lo que ya tenemos
+        const fullDeviceData = { ...deviceData };
+
+        // Si el dispositivo es Windows, hacer la segunda petición para `physicalMemoryInBytes`
+        if (operatingSystem.toLowerCase() === 'windows') {
+            try {
+                const memoryData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}?$select=physicalMemoryInBytes`,token);
+                fullDeviceData.physicalMemoryInBytes = memoryData.physicalMemoryInBytes || 0; 
+            } catch (error) {
+                console.error(`⚠️ No se pudo obtener physicalMemoryInBytes para ${deviceId}:`, error);
+                fullDeviceData.physicalMemoryInBytes = 0; // Si falla, poner 0
+            }
+        } else {
+            fullDeviceData.physicalMemoryInBytes = "N/A"; // Si no es Windows, marcarlo como N/A
+        }
+
+
+        // Guardar detalles en la lista
+        deviceDetailsList.push(fullDeviceData);
 
         // Si el dispositivo es iOS, obtener aplicaciones
         if (operatingSystem.toLowerCase() === 'ios') {
-            await getDeviceApps(deviceId, token);
+            await getDeviceApps(deviceId,token);
         }
     } catch (error) {
         console.error(`❌ Error obteniendo detalles del dispositivo ${deviceId}:`, error);
     }
 };
 
+
+
 /**
  * Obtiene las aplicaciones instaladas en un dispositivo iOS.
  */
-const getDeviceApps = async (deviceId, token) => {
-    try {
-        const appsData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}/detectedApps`, token);
-        console.log(`📱 Aplicaciones detectadas en iOS (${deviceId}):`, appsData.value);
-        
-        // Guardar datos en lista
-        // LOGICA CON WHITE LIST
-        deviceAppsList.push({ deviceId, apps: appsData.value });
-    } catch (error) {
-        console.error(`❌ Error obteniendo aplicaciones del dispositivo ${deviceId}:`, error);
+const getDeviceApps = async (deviceId, token, retries = 3) => {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const appsData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}/detectedApps`, token);
+            
+            // Guardar datos en lista
+            deviceAppsList.push({ deviceId, apps: appsData.value });
+            return; // ✅ Salir de la función si la solicitud fue exitosa
+
+        } catch (error) {
+            if (error.response && error.response.status === 429) {
+                const retryAfter = error.response.headers['retry-after'] || 10; // Si no hay Retry-After, espera 10s
+                console.warn(`⚠️ Demasiadas solicitudes (429). Esperando ${retryAfter} segundos antes de reintentar...`);
+                
+                await new Promise(resolve => setTimeout(resolve, retryAfter * 1000)); // 🕒 Esperar el tiempo indicado
+            } else {
+                console.error(`❌ Error obteniendo aplicaciones del dispositivo ${deviceId}:`, error);
+                return; // ❌ Si el error no es 429, salir de la función
+            }
+        }
     }
 };
+
 
 /**
  * Genera y guarda un archivo Excel con la información procesada.
  */
-const generateExcelReport = async (filePath = `${config.TEMP_DIR}/${config.REPORT_FILENAME}`) => {
+const generateExcelReport = async () => {
     try {
         const workbook = new ExcelJS.Workbook();
+        
+        // Generar timestamp para el nombre del archivo
+        const timestamp = new Date().toISOString().replace(/[:T]/g, '-').split('.')[0];
+        const filePath = `${config.TEMP_DIR}/${config.REPORT_FILENAME.replace('.xlsx', '')}_${timestamp}.xlsx`;
 
         // Crear hojas
         const complianceSheet = workbook.addWorksheet('Compliance Summary');
@@ -116,22 +148,50 @@ const generateExcelReport = async (filePath = `${config.TEMP_DIR}/${config.REPOR
             complianceSheet.addRow({ userPrincipalName: user, compliant: stats.compliant, noncompliant: stats.noncompliant });
         });
 
+        // Función para convertir bytes a GB o MB
+        const formatBytes = (bytes) => {
+            if (typeof bytes === "string") return bytes; // Si es "N/A", devolver tal cual
+            if (bytes >= 1e9) return Math.floor(bytes / 1e9) + ' GB'; // 🔹 Toma solo la parte entera en GB
+            if (bytes >= 1e6) return Math.floor(bytes / 1e6) + ' MB'; // 🔹 Toma solo la parte entera en MB
+            return bytes + ' Bytes';
+        };
+        
+
         // Agregar datos a "Device Details with Apps"
         devicesSheet.columns = [
             { header: 'Device ID', key: 'id', width: 20 },
             { header: 'UserPrincipalName', key: 'userPrincipalName', width: 30 },
             { header: 'Operating System', key: 'operatingSystem', width: 20 },
             { header: 'Compliance State', key: 'complianceState', width: 20 },
+            { header: 'Total Storage', key: 'totalStorage', width: 20 },
+            { header: 'Free Storage', key: 'freeStorage', width: 20 },
+            { header: 'Physical Memory', key: 'physicalMemory', width: 20 },
             { header: 'Installed Apps', key: 'apps', width: 50 }
         ];
+
         deviceDetailsList.forEach(device => {
-            devicesSheet.addRow({
+            const row = devicesSheet.addRow({
                 id: device.id,
                 userPrincipalName: device.userPrincipalName,
                 operatingSystem: device.operatingSystem,
                 complianceState: device.complianceState,
+                totalStorage: formatBytes(device.totalStorageSpaceInBytes),
+                freeStorage: formatBytes(device.freeStorageSpaceInBytes),
+                physicalMemory: formatBytes(device.physicalMemoryInBytes),
                 apps: deviceAppsList.find(d => d.deviceId === device.id)?.apps.map(app => app.displayName).join(", ") || "N/A"
             });
+
+            // 🔥 Resaltar en rojo si el estado es "noncompliant"
+            if (device.complianceState.toLowerCase() === "noncompliant") {
+                row.eachCell((cell) => {
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: 'FFFFC0C0' } // 🔴 Rojo claro
+                    };
+                    cell.font = { bold: true };
+                });
+            }
         });
 
         // Guardar archivo
@@ -142,6 +202,8 @@ const generateExcelReport = async (filePath = `${config.TEMP_DIR}/${config.REPOR
         console.error('❌ Error generando el archivo Excel:', error);
     }
 };
+
+
 
 const sendEmailWithAttachment = async (recipientEmail = config.EMAIL_RECIPIENT) => {
     try {
