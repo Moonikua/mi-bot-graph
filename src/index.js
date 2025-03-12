@@ -1,7 +1,7 @@
 const { getManagedDevices, generateExcelReport, sendEmailWithAttachment } = require('./deviceManager');
 const { getToken } = require('./auth');
 const cron = require('cron').CronJob;
-const config = require('./config'); // ✅ Asegurar que config esté bien cargado
+const config = require('../config'); // ✅ Asegurar que config esté bien cargado
 
 const getCurrentTimestamp = () => {
     return new Date().toLocaleString("es-CL", { timeZone: "America/Santiago" }).replace(',', '');

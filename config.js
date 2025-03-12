@@ -23,5 +23,10 @@ module.exports = {
 
     // Configuración de almacenamiento de archivos
     TEMP_DIR: process.env.TEMP_DIR || './temp',
-    REPORT_FILENAME: process.env.REPORT_FILENAME || 'managed_devices_report.xlsx'
+    REPORT_FILENAME: process.env.REPORT_FILENAME || 'managed_devices_report.xlsx',
+
+    //Ejecucion del BOT 
+    RUN_ON_STARTUP :true,
+    CRON_SCHEDULE:"0 */4 * * *",  //Ejecutar cada 4 horas
+    TIMEZONE:"America/Santiago",
 };
