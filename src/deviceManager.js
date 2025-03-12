@@ -3,6 +3,7 @@ const nodemailer = require('nodemailer');
 const fs = require('fs');
 const ExcelJS = require('exceljs');
 const config = require('../config');
+const path = require('path');
 
 const complianceSummary = {};
 const deviceDetailsList = [];
@@ -13,11 +14,15 @@ const getCurrentTimestamp = () => {
     return new Date().toLocaleString("es-CL", { timeZone: "America/Santiago" }).replace(',', '');
 };
 
-
-console.log(`🕒 Inicio del bot: ${getCurrentTimestamp()}`);
 if (!fs.existsSync(config.TEMP_DIR)) {
     fs.mkdirSync(config.TEMP_DIR);
 }
+//Obtiene el whiteList para poder filtrar las apps
+const whitelist = JSON.parse(fs.readFileSync(path.join(__dirname, 'config/whitelist.json'), 'utf8'));
+//Obtiene los requerimientos por Modelo
+const hardwareRequirements = JSON.parse(fs.readFileSync(path.join(__dirname, 'config/hardwareRequirements.json'), 'utf8'));
+
+const WHITE_LIST_APPS = new Set(whitelist.apps);
 
 // Almacenar resultados en memoria
 
@@ -58,7 +63,7 @@ const getManagedDevices = async (token) => {
 
 
 /**
- * Obtiene detalles de un dispositivo y, si es iOS, obtiene sus aplicaciones.
+ * Obtiene detalles de un dispositivo y, si es iOS, obtiene sus aplicaciones y si es windows obtiene si RAM
  */
 const getDeviceDetails = async (deviceId, operatingSystem,token) => {
     try {
@@ -94,8 +99,6 @@ const getDeviceDetails = async (deviceId, operatingSystem,token) => {
     }
 };
 
-
-
 /**
  * Obtiene las aplicaciones instaladas en un dispositivo iOS.
  */
@@ -104,8 +107,11 @@ const getDeviceApps = async (deviceId, token, retries = 3) => {
         try {
             const appsData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}/detectedApps`, token);
             
-            // Guardar datos en lista
-            deviceAppsList.push({ deviceId, apps: appsData.value });
+            // Filtrar las apps que NO están en la lista blanca
+            const filteredApps = appsData.value.filter(app => !WHITE_LIST_APPS.has(app.displayName));
+
+            // Guardar solo las apps relevantes
+            deviceAppsList.push({ deviceId, apps: filteredApps });
             return; // ✅ Salir de la función si la solicitud fue exitosa
 
         } catch (error) {
@@ -121,6 +127,33 @@ const getDeviceApps = async (deviceId, token, retries = 3) => {
         }
     }
 };
+
+// Función para validar si el hardware cumple con los requisitos
+const validateHardware = (device) => {
+    if (!device || !device.operatingSystem) return { ramAlert: false, storageAlert: false, alertText: "" };
+
+    let ramAlert = false;
+    let storageAlert = false;
+    let alertText = "";
+
+    // Reglas para Windows (Ejemplo: Mínimo 8GB de RAM y 256GB de almacenamiento total)
+    if (device.operatingSystem.toLowerCase() === 'windows') {
+        const minRAM = 8 * 1e9; // 8GB en bytes
+        const minStorage = 256 * 1e9; // 256GB en bytes
+
+        if (device.physicalMemoryInBytes < minRAM) {
+            ramAlert = true;
+            alertText += `RAM insuficiente (${(device.physicalMemoryInBytes / 1e9).toFixed(1)}GB) `;
+        }
+        if (device.totalStorageSpaceInBytes < minStorage) {
+            storageAlert = true;
+            alertText += `Almacenamiento insuficiente (${(device.totalStorageSpaceInBytes / 1e9).toFixed(1)}GB) `;
+        }
+    }
+
+    return { ramAlert, storageAlert, alertText: alertText.trim() || "OK" };
+};
+
 
 
 /**
@@ -138,26 +171,29 @@ const generateExcelReport = async () => {
         const complianceSheet = workbook.addWorksheet('Compliance Summary');
         const devicesSheet = workbook.addWorksheet('Device Details with Apps');
 
-        // Agregar datos a "Compliance Summary"
+        // ➤ Agregar datos a "Compliance Summary"
         complianceSheet.columns = [
             { header: 'UserPrincipalName', key: 'userPrincipalName', width: 30 },
             { header: 'Compliant Devices', key: 'compliant', width: 20 },
             { header: 'Noncompliant Devices', key: 'noncompliant', width: 20 }
         ];
         Object.entries(complianceSummary).forEach(([user, stats]) => {
-            complianceSheet.addRow({ userPrincipalName: user, compliant: stats.compliant, noncompliant: stats.noncompliant });
+            complianceSheet.addRow({
+                userPrincipalName: user,
+                compliant: stats.compliant,
+                noncompliant: stats.noncompliant
+            });
         });
 
-        // Función para convertir bytes a GB o MB
+        // ➤ Función para convertir bytes a GB o MB
         const formatBytes = (bytes) => {
             if (typeof bytes === "string") return bytes; // Si es "N/A", devolver tal cual
-            if (bytes >= 1e9) return Math.floor(bytes / 1e9) + ' GB'; // 🔹 Toma solo la parte entera en GB
-            if (bytes >= 1e6) return Math.floor(bytes / 1e6) + ' MB'; // 🔹 Toma solo la parte entera en MB
+            if (bytes >= 1e9) return Math.floor(bytes / 1e9) + ' GB'; // ✅ Solo parte entera en GB
+            if (bytes >= 1e6) return Math.floor(bytes / 1e6) + ' MB'; // ✅ Solo parte entera en MB
             return bytes + ' Bytes';
         };
-        
 
-        // Agregar datos a "Device Details with Apps"
+        // ➤ Agregar datos a "Device Details with Apps"
         devicesSheet.columns = [
             { header: 'Device ID', key: 'id', width: 20 },
             { header: 'UserPrincipalName', key: 'userPrincipalName', width: 30 },
@@ -166,11 +202,20 @@ const generateExcelReport = async () => {
             { header: 'Total Storage', key: 'totalStorage', width: 20 },
             { header: 'Free Storage', key: 'freeStorage', width: 20 },
             { header: 'Physical Memory', key: 'physicalMemory', width: 20 },
+            { header: 'Hardware Alert', key: 'hardwareAlert', width: 20 },
             { header: 'Installed Apps', key: 'apps', width: 50 }
         ];
 
         deviceDetailsList.forEach(device => {
-            const row = devicesSheet.addRow({
+            const { ramAlert, storageAlert } = validateHardware(device);
+
+            // Generar mensaje de alerta
+            let alertMessage = "";
+            if (ramAlert) alertMessage += "Low RAM ";
+            if (storageAlert) alertMessage += "Low Storage";
+
+            // Agregar fila
+            let row = devicesSheet.addRow({
                 id: device.id,
                 userPrincipalName: device.userPrincipalName,
                 operatingSystem: device.operatingSystem,
@@ -178,23 +223,20 @@ const generateExcelReport = async () => {
                 totalStorage: formatBytes(device.totalStorageSpaceInBytes),
                 freeStorage: formatBytes(device.freeStorageSpaceInBytes),
                 physicalMemory: formatBytes(device.physicalMemoryInBytes),
+                hardwareAlert: alertMessage || "OK",
                 apps: deviceAppsList.find(d => d.deviceId === device.id)?.apps.map(app => app.displayName).join(", ") || "N/A"
             });
 
-            // 🔥 Resaltar en rojo si el estado es "noncompliant"
-            if (device.complianceState.toLowerCase() === "noncompliant") {
-                row.eachCell((cell) => {
-                    cell.fill = {
-                        type: 'pattern',
-                        pattern: 'solid',
-                        fgColor: { argb: 'FFFFC0C0' } // 🔴 Rojo claro
-                    };
-                    cell.font = { bold: true };
-                });
+            // ➤ Resaltar celdas según condiciones
+            if (device.complianceState.toLowerCase() === 'noncompliant') {
+                row.getCell('complianceState').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0000' } }; // 🔴 Rojo intenso
+            }
+            if (ramAlert || storageAlert) {
+                row.getCell('hardwareAlert').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } }; // 🟡 Amarillo para alertas
             }
         });
 
-        // Guardar archivo
+        // ➤ Guardar archivo
         await workbook.xlsx.writeFile(filePath);
         console.log(`✅ Archivo Excel generado: ${filePath}`);
         return filePath;
@@ -202,6 +244,8 @@ const generateExcelReport = async () => {
         console.error('❌ Error generando el archivo Excel:', error);
     }
 };
+
+
 
 
 

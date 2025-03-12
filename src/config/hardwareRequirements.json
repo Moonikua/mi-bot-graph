@@ -1,0 +1,16 @@
+{
+    "models": {
+        "Dell Latitude 5420": {
+            "minRAM": 8,
+            "minStorage": 256
+        },
+        "Lenovo ThinkPad X1 Carbon": {
+            "minRAM": 16,
+            "minStorage": 512
+        },
+        "HP EliteBook 850 G7": {
+            "minRAM": 16,
+            "minStorage": 512
+        }
+    }
+}
