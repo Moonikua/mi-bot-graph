@@ -5,99 +5,83 @@ const ExcelJS = require('exceljs');
 const config = require('../config');
 const path = require('path');
 
-const complianceSummary = {};
-const deviceDetailsList = [];
-const deviceAppsList = [];
-
-// Obtener la fecha y hora actual para el log
 const getCurrentTimestamp = () => {
     return new Date().toLocaleString("es-CL", { timeZone: "America/Santiago" }).replace(',', '');
 };
 
+const { WHITELIST, HARDWARE_REQUIREMENTS } = config;
+const WHITE_LIST_APPS = new Set(WHITELIST.apps);
+
 if (!fs.existsSync(config.TEMP_DIR)) {
     fs.mkdirSync(config.TEMP_DIR);
 }
-//Obtiene el whiteList para poder filtrar las apps
-const whitelist = JSON.parse(fs.readFileSync(path.join(__dirname, 'config/whitelist.json'), 'utf8'));
-//Obtiene los requerimientos por Modelo
-const hardwareRequirements = JSON.parse(fs.readFileSync(path.join(__dirname, 'config/hardwareRequirements.json'), 'utf8'));
 
-const WHITE_LIST_APPS = new Set(whitelist.apps);
-
-// Almacenar resultados en memoria
 
 /** Obtiene la lista de dispositivos gestionados y procesa el estado de cumplimiento. */
 const getManagedDevices = async (token) => {
+    let complianceSummary = {};
+    let deviceDetailsList = [];
+    let deviceAppsList = [];
+
     try {
         console.log(`📡 Consultando dispositivos gestionados... (${getCurrentTimestamp()})`);
-        const data = await graphRequest('/deviceManagement/managedDevices', token);
-        console.log('✅ Dispositivos gestionados obtenidos con éxito:');
-        
-        const devices = data.value;
+        const data = await graphRequest(config.DEVICE_LIST, token);
+        console.log('✅ Dispositivos gestionados obtenidos con éxito');
 
-        for (const device of devices) {
+        for (const device of data.value) {
             const userPrincipalName = device.userPrincipalName || 'Unknown User';
             const complianceState = device.complianceState || 'unknown';
-            
+
             if (!complianceSummary[userPrincipalName]) {
                 complianceSummary[userPrincipalName] = { compliant: 0, noncompliant: 0 };
             }
-            
-            if (complianceState === 'compliant') {
-                complianceSummary[userPrincipalName].compliant += 1;
-            } else if (complianceState === 'noncompliant') {
-                complianceSummary[userPrincipalName].noncompliant += 1;
-            }
+            complianceSummary[userPrincipalName][complianceState === 'compliant' ? 'compliant' : 'noncompliant'] += 1;
         }
-                
-        // Iterar sobre los dispositivos para obtener más información
-        for (const device of devices) {
-            await getDeviceDetails(device.id, device.operatingSystem, token);
+
+        for (const device of data.value) {
+            await getDeviceDetails(device.id, device.operatingSystem, token, deviceDetailsList, deviceAppsList);
         }
-        
+
         return { complianceSummary, deviceDetailsList, deviceAppsList };
     } catch (error) {
-        console.error(`❌ Error obteniendo dispositivos gestionados (${getCurrentTimestamp()}):`, error);
+        console.error(`❌ Error obteniendo dispositivos gestionados:`, error);
+        return { complianceSummary, deviceDetailsList, deviceAppsList };
     }
- };
-
+};
 
 /**
  * Obtiene detalles de un dispositivo y, si es iOS, obtiene sus aplicaciones y si es windows obtiene si RAM
  */
-const getDeviceDetails = async (deviceId, operatingSystem,token) => {
+const getDeviceDetails = async (deviceId, operatingSystem, token, deviceDetailsList, deviceAppsList) => {
     try {
-        // Primera petición: Obtener detalles generales del dispositivo
-        const deviceData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}`,token);
-
-        // Inicializar datos del dispositivo con lo que ya tenemos
+        const deviceData = await graphRequest(`${config.DEVICE_LIST}/${deviceId}`, token);
         const fullDeviceData = { ...deviceData };
 
-        // Si el dispositivo es Windows, hacer la segunda petición para `physicalMemoryInBytes`
         if (operatingSystem.toLowerCase() === 'windows') {
             try {
-                const memoryData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}?$select=physicalMemoryInBytes`,token);
-                fullDeviceData.physicalMemoryInBytes = memoryData.physicalMemoryInBytes || 0; 
+                const memoryData = await graphRequest(`${config.DEVICE_LIST}/${deviceId}?${config.GET_RAM}`, token);
+                fullDeviceData.physicalMemoryInBytes = memoryData.physicalMemoryInBytes || 0;
             } catch (error) {
                 console.error(`⚠️ No se pudo obtener physicalMemoryInBytes para ${deviceId}:`, error);
-                fullDeviceData.physicalMemoryInBytes = 0; // Si falla, poner 0
+                fullDeviceData.physicalMemoryInBytes = 0;
             }
         } else {
-            fullDeviceData.physicalMemoryInBytes = "N/A"; // Si no es Windows, marcarlo como N/A
+            fullDeviceData.physicalMemoryInBytes = "N/A";
         }
 
-
-        // Guardar detalles en la lista
         deviceDetailsList.push(fullDeviceData);
 
-        // Si el dispositivo es iOS, obtener aplicaciones
         if (operatingSystem.toLowerCase() === 'ios') {
-            await getDeviceApps(deviceId,token);
+            const apps = await getDeviceApps(deviceId, token);
+            if (apps) {
+                deviceAppsList.push({ deviceId, apps });
+            }
         }
     } catch (error) {
         console.error(`❌ Error obteniendo detalles del dispositivo ${deviceId}:`, error);
     }
 };
+
 
 /**
  * Obtiene las aplicaciones instaladas en un dispositivo iOS.
@@ -105,29 +89,21 @@ const getDeviceDetails = async (deviceId, operatingSystem,token) => {
 const getDeviceApps = async (deviceId, token, retries = 3) => {
     for (let i = 0; i < retries; i++) {
         try {
-            const appsData = await graphRequest(`/deviceManagement/managedDevices/${deviceId}/detectedApps`, token);
-            
-            // Filtrar las apps que NO están en la lista blanca
-            const filteredApps = appsData.value.filter(app => !WHITE_LIST_APPS.has(app.displayName));
-
-            // Guardar solo las apps relevantes
-            deviceAppsList.push({ deviceId, apps: filteredApps });
-            return; // ✅ Salir de la función si la solicitud fue exitosa
-
+            const appsData = await graphRequest(`${config.DEVICE_LIST}/${deviceId}${config.GET_APPS}`, token);
+            return appsData.value.filter(app => !WHITE_LIST_APPS.has(app.displayName));
         } catch (error) {
-            if (error.response && error.response.status === 429) {
-                const retryAfter = error.response.headers['retry-after'] || 10; // Si no hay Retry-After, espera 10s
-                console.warn(`⚠️ Demasiadas solicitudes (429). Esperando ${retryAfter} segundos antes de reintentar...`);
-                
-                await new Promise(resolve => setTimeout(resolve, retryAfter * 1000)); // 🕒 Esperar el tiempo indicado
+            if (error.response?.status === 429) {
+                const retryAfter = error.response.headers['retry-after'] || 10;
+                console.warn(`⚠️ Rate Limit Exceeded (429). Retrying in ${retryAfter} seconds...`);
+                await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
             } else {
-                console.error(`❌ Error obteniendo aplicaciones del dispositivo ${deviceId}:`, error);
-                return; // ❌ Si el error no es 429, salir de la función
+                console.error(`❌ Error obteniendo aplicaciones para ${deviceId}:`, error);
+                return null;
             }
         }
     }
+    return null;
 };
-
 // Función para validar si el hardware cumple con los requisitos
 const validateHardware = (device) => {
     if (!device || !device.operatingSystem) return { ramAlert: false, storageAlert: false, alertText: "" };
@@ -159,24 +135,25 @@ const validateHardware = (device) => {
 /**
  * Genera y guarda un archivo Excel con la información procesada.
  */
-const generateExcelReport = async () => {
+const generateExcelReport = async (complianceSummary, deviceDetailsList, deviceAppsList) => {
     try {
         const workbook = new ExcelJS.Workbook();
-        
-        // Generar timestamp para el nombre del archivo
+
+        // 🔹 Generar timestamp para el nombre del archivo
         const timestamp = new Date().toISOString().replace(/[:T]/g, '-').split('.')[0];
         const filePath = `${config.TEMP_DIR}/${config.REPORT_FILENAME.replace('.xlsx', '')}_${timestamp}.xlsx`;
 
-        // Crear hojas
+        // 🔹 Crear hojas en el archivo Excel
         const complianceSheet = workbook.addWorksheet('Compliance Summary');
         const devicesSheet = workbook.addWorksheet('Device Details with Apps');
 
-        // ➤ Agregar datos a "Compliance Summary"
+        // 📌 Agregar datos a "Compliance Summary"
         complianceSheet.columns = [
             { header: 'UserPrincipalName', key: 'userPrincipalName', width: 30 },
             { header: 'Compliant Devices', key: 'compliant', width: 20 },
             { header: 'Noncompliant Devices', key: 'noncompliant', width: 20 }
         ];
+
         Object.entries(complianceSummary).forEach(([user, stats]) => {
             complianceSheet.addRow({
                 userPrincipalName: user,
@@ -185,15 +162,15 @@ const generateExcelReport = async () => {
             });
         });
 
-        // ➤ Función para convertir bytes a GB o MB
+        // 📌 Función para convertir bytes a GB o MB
         const formatBytes = (bytes) => {
-            if (typeof bytes === "string") return bytes; // Si es "N/A", devolver tal cual
-            if (bytes >= 1e9) return Math.floor(bytes / 1e9) + ' GB'; // ✅ Solo parte entera en GB
-            if (bytes >= 1e6) return Math.floor(bytes / 1e6) + ' MB'; // ✅ Solo parte entera en MB
+            if (typeof bytes === "string") return bytes;
+            if (bytes >= 1e9) return Math.floor(bytes / 1e9) + ' GB';
+            if (bytes >= 1e6) return Math.floor(bytes / 1e6) + ' MB';
             return bytes + ' Bytes';
         };
 
-        // ➤ Agregar datos a "Device Details with Apps"
+        // 📌 Agregar datos a "Device Details with Apps"
         devicesSheet.columns = [
             { header: 'Device ID', key: 'id', width: 20 },
             { header: 'UserPrincipalName', key: 'userPrincipalName', width: 30 },
@@ -207,14 +184,8 @@ const generateExcelReport = async () => {
         ];
 
         deviceDetailsList.forEach(device => {
-            const { ramAlert, storageAlert } = validateHardware(device);
+            const { ramAlert, storageAlert, alertText } = validateHardware(device);
 
-            // Generar mensaje de alerta
-            let alertMessage = "";
-            if (ramAlert) alertMessage += "Low RAM ";
-            if (storageAlert) alertMessage += "Low Storage";
-
-            // Agregar fila
             let row = devicesSheet.addRow({
                 id: device.id,
                 userPrincipalName: device.userPrincipalName,
@@ -223,20 +194,19 @@ const generateExcelReport = async () => {
                 totalStorage: formatBytes(device.totalStorageSpaceInBytes),
                 freeStorage: formatBytes(device.freeStorageSpaceInBytes),
                 physicalMemory: formatBytes(device.physicalMemoryInBytes),
-                hardwareAlert: alertMessage || "OK",
+                hardwareAlert: alertText,
                 apps: deviceAppsList.find(d => d.deviceId === device.id)?.apps.map(app => app.displayName).join(", ") || "N/A"
             });
 
-            // ➤ Resaltar celdas según condiciones
             if (device.complianceState.toLowerCase() === 'noncompliant') {
-                row.getCell('complianceState').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0000' } }; // 🔴 Rojo intenso
+                row.getCell('complianceState').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0000' } };
             }
             if (ramAlert || storageAlert) {
-                row.getCell('hardwareAlert').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } }; // 🟡 Amarillo para alertas
+                row.getCell('hardwareAlert').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } };
             }
         });
 
-        // ➤ Guardar archivo
+        // 📌 Guardar archivo
         await workbook.xlsx.writeFile(filePath);
         console.log(`✅ Archivo Excel generado: ${filePath}`);
         return filePath;
@@ -246,22 +216,20 @@ const generateExcelReport = async () => {
 };
 
 
-
-
-
-const sendEmailWithAttachment = async (recipientEmail = config.EMAIL_RECIPIENT) => {
+const sendEmailWithAttachment = async (complianceSummary, deviceDetailsList, deviceAppsList, recipientEmail = config.EMAIL_RECIPIENT) => {
     try {
-        const filePath = await generateExcelReport();
+        console.log(`📡 Generando el reporte antes de enviar el email...`);
 
-        // Configuración del transporte SMTP
+        // 🔹 Generar el reporte con los datos ya obtenidos en `runBot()`
+        const filePath = await generateExcelReport(complianceSummary, deviceDetailsList, deviceAppsList);
+        if (!filePath) throw new Error('❌ No se pudo generar el reporte.');
+
+        // 📧 Configuración del correo
         let transporter = nodemailer.createTransport({
             host: config.SMTP_HOST,
             port: config.SMTP_PORT,
-            secure: config.SMTP_SECURE, // true para 465, false para otros
-            auth: {
-                user: config.SMTP_USER,
-                pass: config.SMTP_PASSWORD
-            }
+            secure: config.SMTP_SECURE,
+            auth: { user: config.SMTP_USER, pass: config.SMTP_PASSWORD }
         });
 
         let mailOptions = {
@@ -269,16 +237,13 @@ const sendEmailWithAttachment = async (recipientEmail = config.EMAIL_RECIPIENT) 
             to: recipientEmail,
             subject: '📊 Reporte de Dispositivos Gestionados',
             text: 'Adjunto encontrarás el reporte en formato Excel.',
-            attachments: [
-                { filename: config.REPORT_FILENAME, path: filePath }
-            ]
+            attachments: [{ filename: path.basename(filePath), path: filePath }]
         };
 
-        let info = await transporter.sendMail(mailOptions);
-        console.log(`📧 Email enviado con éxito a ${recipientEmail}:`, info.response);
+        await transporter.sendMail(mailOptions);
+        console.log(`📧 Email enviado a ${recipientEmail}`);
 
-        // Eliminar el archivo después del envío
-        fs.unlinkSync(filePath);
+        await fs.unlink(filePath);
         console.log(`🗑️ Archivo eliminado: ${filePath}`);
     } catch (error) {
         console.error('❌ Error enviando el correo:', error);
@@ -286,4 +251,7 @@ const sendEmailWithAttachment = async (recipientEmail = config.EMAIL_RECIPIENT) 
 };
 
 
-module.exports = { getManagedDevices, generateExcelReport, sendEmailWithAttachment, complianceSummary, deviceDetailsList, deviceAppsList };
+
+
+module.exports = { getManagedDevices, sendEmailWithAttachment };
+
