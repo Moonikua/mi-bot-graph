@@ -1,4 +1,5 @@
-const { getManagedDevices, sendEmailWithAttachment } = require('./deviceManager');
+const { getManagedDevices } = require('./deviceManager');
+const { sendEmailWithAttachment } = require('./emailSender');
 const { getToken } = require('./auth');
 const cron = require('cron').CronJob;
 const config = require('../config');
