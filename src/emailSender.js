@@ -46,4 +46,4 @@ const sendEmailWithAttachment = async (complianceSummary, deviceDetailsList, dev
     }
 };
 
-module.exports { sendEmailWithAttachment }
+module.exports =  { sendEmailWithAttachment };
