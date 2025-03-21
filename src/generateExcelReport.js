@@ -112,4 +112,4 @@ const generateExcelReport = async (complianceSummary, deviceDetailsList, deviceA
     }
 };
 
-export {generateExcelReport}
+module.exports {generateExcelReport}

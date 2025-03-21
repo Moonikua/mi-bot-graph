@@ -7,25 +7,33 @@ const path = require('path');
 const sendEmailWithAttachment = async (complianceSummary, deviceDetailsList, deviceAppsList, recipientEmail = config.EMAIL_RECIPIENT) => {
     try {
         console.log(`📡 Generando el reporte antes de enviar el email...`);
-
-        // 🔹 Generar el reporte con los datos ya obtenidos en `runBot()`
         const filePath = await generateExcelReport(complianceSummary, deviceDetailsList, deviceAppsList);
         if (!filePath) throw new Error('❌ No se pudo generar el reporte.');
 
-        // 📧 Configuración del correo
-        let transporter = nodemailer.createTransport({
+        const transporter = nodemailer.createTransport({
             host: config.SMTP_HOST,
-            port: config.SMTP_PORT,
-            secure: config.SMTP_SECURE,
-            auth: { user: config.SMTP_USER, pass: config.SMTP_PASSWORD }
+            port: parseInt(config.SMTP_PORT),
+            secure: config.SMTP_SECURE === 'true',
+            auth: {
+                user: config.SMTP_USER,
+                pass: config.SMTP_PASSWORD
+            }
         });
 
-        let mailOptions = {
+        await transporter.verify();
+        console.log("✅ Conexión SMTP válida.");
+
+        const mailOptions = {
             from: config.EMAIL_SENDER,
             to: recipientEmail,
             subject: '📊 Reporte de Dispositivos Gestionados',
             text: 'Adjunto encontrarás el reporte en formato Excel.',
-            attachments: [{ filename: path.basename(filePath), path: filePath }]
+            attachments: [
+                {
+                    filename: path.basename(filePath),
+                    path: filePath
+                }
+            ]
         };
 
         await transporter.sendMail(mailOptions);
@@ -38,4 +46,4 @@ const sendEmailWithAttachment = async (complianceSummary, deviceDetailsList, dev
     }
 };
 
-export {sendEmailWithAttachment}
+module.exports { sendEmailWithAttachment }
