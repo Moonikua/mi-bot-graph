@@ -30,7 +30,8 @@ const sendEmailWithAttachment = async (complianceSummary, deviceDetailsList, dev
         await transporter.sendMail(mailOptions);
         console.log(`📧 Email enviado con éxito a ${config.EMAIL_RECIPIENT}`);
 
-        await fs.unlink(filePath);
+        await fs.promises.unlink(filePath);
+
         console.log(`🗑️ Archivo eliminado: ${filePath}`);
 
     } catch (error) {
