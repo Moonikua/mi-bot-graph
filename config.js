@@ -19,7 +19,15 @@ module.exports = {
     CLIENT_SECRET: process.env.CLIENT_SECRET,
 
 
+
+
     // 🔹 Configuración de correos
+    // 🔹 Configuración SMTP (para nodemailer con Gmail u otro servicio)
+    SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
+    SMTP_PORT: process.env.SMTP_PORT || 587,
+    SMTP_SECURE: process.env.SMTP_SECURE === 'true', // true para SSL, false para STARTTLS
+    SMTP_USER: process.env.SMTP_USER,
+    SMTP_PASSWORD: process.env.SMTP_PASSWORD,
     EMAIL_SENDER: process.env.EMAIL_SENDER || 'tu_correo@gmail.com',
     EMAIL_RECIPIENT: process.env.EMAIL_RECIPIENT || 'destinatario@email.com',
 
