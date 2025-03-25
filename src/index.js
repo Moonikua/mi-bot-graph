@@ -25,7 +25,7 @@ const runBot = async () => {
         const { complianceSummary, deviceDetailsList, deviceAppsList } = await getManagedDevices(token);
 
         // 📧 Enviar el archivo por correo con los datos ya obtenidos
-        await sendEmailWithAttachment(complianceSummary, deviceDetailsList, deviceAppsList);
+        await sendEmailWithAttachment(complianceSummary, deviceDetailsList, deviceAppsList,token);
 
         console.log(`🕒 Termino del bot: ${getCurrentTimestamp()}`);
         console.log("✅ Proceso completado exitosamente.");

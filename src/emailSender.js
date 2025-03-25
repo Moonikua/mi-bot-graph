@@ -1,49 +1,57 @@
-const nodemailer = require('nodemailer');
+const axios = require('axios');
 const { generateExcelReport } = require('./generateExcelReport');
 const fs = require('fs');
 const config = require('../config');
-const path = require('path');
 
-const sendEmailWithAttachment = async (complianceSummary, deviceDetailsList, deviceAppsList, recipientEmail = config.EMAIL_RECIPIENT) => {
+const getCurrentTimestamp = () => {
+    return new Date().toLocaleString("es-CL", { timeZone: "America/Santiago" }).replace(',', '');
+};
+
+const sendEmailWithAttachment = async (complianceSummary, deviceDetailsList, deviceAppsList, token) => {
     try {
         console.log(`📡 Generando el reporte antes de enviar el email...`);
+
+        // 🔹 Generar el reporte
         const filePath = await generateExcelReport(complianceSummary, deviceDetailsList, deviceAppsList);
         if (!filePath) throw new Error('❌ No se pudo generar el reporte.');
 
-        const transporter = nodemailer.createTransport({
-            host: config.SMTP_HOST,
-            port: parseInt(config.SMTP_PORT),
-            secure: config.SMTP_SECURE === 'true',
-            auth: {
-                user: config.SMTP_USER,
-                pass: config.SMTP_PASSWORD
-            }
-        });
+        if (!token) {
+            throw new Error("❌ No se pudo obtener el token de autenticación para enviar el correo.");
+        }
 
-        await transporter.verify();
-        console.log("✅ Conexión SMTP válida.");
-
-        const mailOptions = {
-            from: config.EMAIL_SENDER,
-            to: recipientEmail,
-            subject: '📊 Reporte de Dispositivos Gestionados',
-            text: 'Adjunto encontrarás el reporte en formato Excel.',
-            attachments: [
-                {
-                    filename: path.basename(filePath),
-                    path: filePath
-                }
-            ]
+        // 📧 Datos del correo electrónico
+        const emailData = {
+            message: {
+                subject: "📊 Reporte de Dispositivos Gestionados",
+                body: { contentType: "Text", content: "Adjunto encontrarás el reporte." },
+                toRecipients: [{ emailAddress: { address: config.EMAIL_RECIPIENT } }],
+                attachments: [
+                    {
+                        "@odata.type": "#microsoft.graph.fileAttachment",
+                        name: `Reporte_Dispositivos_${getCurrentTimestamp()}.xlsx`,
+                        contentBytes: fs.readFileSync(filePath).toString("base64")
+                    }
+                ]
+            },
+            saveToSentItems: true
         };
 
-        await transporter.sendMail(mailOptions);
-        console.log(`📧 Email enviado a ${recipientEmail}`);
+        // 🔹 Enviar el correo con Graph API usando la nueva cuenta
+        const response = await axios.post(
+            `https://graph.microsoft.com/v1.0/users/${config.SMTP_USER}/sendMail`,
+            emailData,
+            { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } }
+        );
 
+        console.log(`📧 Email enviado con Graph API desde ${config.SMTP_USER}`);
+
+        // 🗑️ Eliminar el archivo después del envío
         await fs.unlink(filePath);
         console.log(`🗑️ Archivo eliminado: ${filePath}`);
+
     } catch (error) {
-        console.error('❌ Error enviando el correo:', error);
+        console.error('❌ Error enviando el correo con Graph API:', error.response?.data || error.message);
     }
 };
 
-module.exports =  { sendEmailWithAttachment };
+module.exports = { sendEmailWithAttachment };

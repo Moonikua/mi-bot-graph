@@ -18,12 +18,6 @@ module.exports = {
     CLIENT_ID: process.env.CLIENT_ID,
     CLIENT_SECRET: process.env.CLIENT_SECRET,
 
-    // 🔹 Configuración SMTP
-    SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
-    SMTP_PORT: Number(process.env.SMTP_PORT) || 587,
-    SMTP_SECURE: process.env.SMTP_SECURE === 'true',
-    SMTP_USER: process.env.SMTP_USER,
-    SMTP_PASSWORD: process.env.SMTP_PASSWORD,
 
     // 🔹 Configuración de correos
     EMAIL_SENDER: process.env.EMAIL_SENDER || 'tu_correo@gmail.com',
