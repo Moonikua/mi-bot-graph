@@ -73,6 +73,7 @@ const generateExcelReport = async (complianceSummary, deviceDetailsList, deviceA
             { header: 'UserPrincipalName', key: 'userPrincipalName', width: 30 },
             { header: 'Operating System', key: 'operatingSystem', width: 20 },
             { header: 'Compliance State', key: 'complianceState', width: 20 },
+            { header: 'Last Sync', key: 'lastSyncDateTime', width: 25 }, // ✅ NUEVO
             { header: 'Total Storage', key: 'totalStorage', width: 20 },
             { header: 'Free Storage', key: 'freeStorage', width: 20 },
             { header: 'Physical Memory', key: 'physicalMemory', width: 20 },
@@ -88,6 +89,9 @@ const generateExcelReport = async (complianceSummary, deviceDetailsList, deviceA
                 userPrincipalName: device.userPrincipalName,
                 operatingSystem: device.operatingSystem,
                 complianceState: device.complianceState,
+                lastSyncDateTime: device.lastSyncDateTime 
+                    ? new Date(device.lastSyncDateTime).toLocaleString("es-CL", { timeZone: "America/Santiago" }) 
+                    : 'N/A', // ✅ NUEVO FORMATEO
                 totalStorage: formatBytes(device.totalStorageSpaceInBytes),
                 freeStorage: formatBytes(device.freeStorageSpaceInBytes),
                 physicalMemory: formatBytes(device.physicalMemoryInBytes),
