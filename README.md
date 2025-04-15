@@ -9,10 +9,20 @@ MCI-BOT es una herramienta automatizada desarrollada en Node.js que se conecta a
 
 ### 1️⃣ Clonar el Repositorio
 
-```bash
-git clone https://github.com/Moonikua/mi-bot-graph.git
-cd mi-bot-graph
-```
+# Crear la carpeta de instalación en el lugar adecuado
+sudo mkdir -p /opt/mci-bot
+
+# Clonar el repositorio directamente en esa ruta
+sudo git clone https://github.com/Moonikua/mi-bot-graph.git /opt/mci-bot
+
+# Dar permisos al usuario actual o al usuario del sistema que ejecutará el BOT
+sudo chown -R $USER:$USER /opt/mci-bot
+
+# Acceder al directorio del proyecto
+cd /opt/mci-bot
+
+
+
 
 ### 2️⃣ Instalar Dependencias
 
