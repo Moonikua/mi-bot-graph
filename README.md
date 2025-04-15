@@ -1,51 +1,101 @@
-// README.md
-const readmeContent = `
-# MCI-BOT
+# 🤖 MCI-BOT
 
-## Descripción
-MCI-BOT es una herramienta automatizada que se conecta a Microsoft Graph API para obtener información sobre dispositivos gestionados, generar reportes en Excel y enviarlos automáticamente por correo electrónico.
+## 📌 Descripción
+MCI-BOT es una herramienta automatizada desarrollada en Node.js que se conecta a Microsoft Graph API para consultar dispositivos gestionados en Intune, generar reportes en formato Excel, y enviarlos automáticamente por correo electrónico a destinatarios definidos.
 
-## Instalación
-### 1. Clonar el Repositorio
+---
 
+## ⚙️ Instalación
+
+### 1️⃣ Clonar el Repositorio
+
+```bash
 git clone https://github.com/Moonikua/mi-bot-graph.git
 cd mi-bot-graph
+```
 
-### 2. Instalar Dependencias
+### 2️⃣ Instalar Dependencias
 
+```bash
 npm install
+```
 
-### 3. Configurar Variables de Entorno
-Crear un archivo `.env` en la raíz del proyecto con la siguiente estructura:
+### 3️⃣ Configurar Variables de Entorno
 
-TENANT_ID=xxxx-xxxx-xxxx-xxxx
-CLIENT_ID=xxxx-xxxx-xxxx-xxxx
-CLIENT_SECRET=xxxxxxxxxx
+Crear un archivo `.env` en la raíz del proyecto con el siguiente contenido:
+
+```
+TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+CLIENT_SECRET=xxxxxxxxxxxxxxxxxxxxxx
+EMAIL_SENDER=bot.mcinverciones.chile@gmail.com
+EMAIL_RECIPIENT=destinatario@empresa.com
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=bot.mcinverciones.chile@gmail.com
-CRON_SCHEDULE="0 */4 * * *"
-TIMEZONE="America/Santiago"
+SMTP_PASSWORD=contraseña_o_clave_de_aplicacion
+CRON_SCHEDULE=0 */4 * * *
+TIMEZONE=America/Santiago
+```
 
-### 4. Ejecutar el Bot Manualmente
+> ⚠️ **Importante:** Para Gmail, se recomienda utilizar una [clave de aplicación](https://support.google.com/accounts/answer/185833?hl=es) y habilitar acceso IMAP.
 
+---
+
+## 🚀 Ejecución del Bot
+
+### Opción 1: Manual
+
+```bash
 npm start
+```
 
-### 5. Configurar PM2 para Ejecución en Producción
+### Opción 2: Producción con PM2
 
+```bash
 pm2 start ecosystem.config.js
 pm2 save
 pm2 startup
+```
 
-## Uso
-El bot consulta automáticamente dispositivos en Intune y genera un reporte en Excel con el estado de cumplimiento de cada dispositivo.
+---
 
-## Monitoreo
-Para ver logs en tiempo real:
+## 📈 Monitoreo del Bot
 
+Para ver los logs en tiempo real:
+
+```bash
 pm2 logs mci-bot
+```
 
-## Contacto y Soporte
-Para soporte técnico, contactar a soporte@mcinversiones.com
-`;
+---
+
+## 📂 Estructura Recomendada del Proyecto
+
+```
+├── src/
+│   ├── auth.js
+│   ├── deviceManager.js
+│   ├── emailSender.js
+│   ├── generateExcelReport.js
+│   └── index.js
+├── config/
+│   ├── whitelist.json
+│   ├── hardwareRequirements.json
+├── temp/
+│   └── managed_devices_report_YYYY-MM-DD.xlsx
+├── .env
+├── ecosystem.config.js
+├── package.json
+└── README.md
+```
+
+---
+
+## 🛠️ Soporte
+
+Para consultas técnicas, comunicarse con:  
+📧 **soporte@mcinversiones.com**
+
+---
