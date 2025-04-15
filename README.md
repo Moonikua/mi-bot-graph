@@ -21,11 +21,10 @@ Crear un archivo `.env` en la raíz del proyecto con la siguiente estructura:
 TENANT_ID=xxxx-xxxx-xxxx-xxxx
 CLIENT_ID=xxxx-xxxx-xxxx-xxxx
 CLIENT_SECRET=xxxxxxxxxx
-SMTP_HOST=mail.mcinversiones.com
+SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=dev.dcs@mcinversiones.com
-SMTP_PASS=********
-EMAIL_RECIPIENT=intune@mcinversiones.com
+SMTP_SECURE=false
+SMTP_USER=bot.mcinverciones.chile@gmail.com
 CRON_SCHEDULE="0 */4 * * *"
 TIMEZONE="America/Santiago"
 
