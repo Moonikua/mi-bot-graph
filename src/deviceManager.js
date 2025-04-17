@@ -58,16 +58,10 @@ const getDeviceDetails = async (deviceId, operatingSystem, token, deviceDetailsL
         const fullDeviceData = { ...deviceData };
 
         if (operatingSystem.toLowerCase() === 'windows') {
-            try {
-                const memoryData = await graphRequest(`${config.DEVICE_LIST}/${deviceId}?${config.GET_RAM}`, token);
-                fullDeviceData.physicalMemoryInBytes = memoryData.physicalMemoryInBytes || 0;
-            } catch (error) {
-                console.error(`⚠️ No se pudo obtener physicalMemoryInBytes para ${deviceId}:`, error);
-                fullDeviceData.physicalMemoryInBytes = 0;
-            }
+            fullDeviceData.physicalMemoryInBytes = await getPhysicalMemorySafely(deviceId, token);
         } else {
             fullDeviceData.physicalMemoryInBytes = "N/A";
-        }
+        }        
 
         deviceDetailsList.push(fullDeviceData);
 
@@ -81,6 +75,17 @@ const getDeviceDetails = async (deviceId, operatingSystem, token, deviceDetailsL
         console.error(`❌ Error obteniendo detalles del dispositivo ${deviceId}:`, error);
     }
 };
+
+const getPhysicalMemorySafely = async (deviceId, token) => {
+    try {
+        const response = await graphRequest(`${config.DEVICE_LIST}/${deviceId}?${config.GET_RAM}`, token);
+        return response.physicalMemoryInBytes || 0;
+    } catch (err) {
+        console.warn(`⚠️ No se pudo obtener physicalMemoryInBytes para ${deviceId}:`, err.response?.status || err.message);
+        return 0;
+    }
+};
+
 
 
 /**
