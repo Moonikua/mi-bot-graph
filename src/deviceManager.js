@@ -76,15 +76,30 @@ const getDeviceDetails = async (deviceId, operatingSystem, token, deviceDetailsL
     }
 };
 
-const getPhysicalMemorySafely = async (deviceId, token) => {
-    try {
-        const response = await graphRequest(`${config.DEVICE_LIST}/${deviceId}?${config.GET_RAM}`, token);
-        return response.physicalMemoryInBytes || 0;
-    } catch (err) {
-        console.warn(`⚠️ No se pudo obtener physicalMemoryInBytes para ${deviceId}:`, err.response?.status || err.message);
-        return 0;
+const getPhysicalMemorySafely = async (deviceId, token, retries = 3, delay = 5000) => {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await graphRequest(`${config.DEVICE_LIST}/${deviceId}?${config.GET_RAM}`, token);
+            return response.physicalMemoryInBytes || 0;
+        } catch (err) {
+            const status = err.response?.status;
+
+            // Si es error 429 o 503 reintentamos
+            if (status === 429 || status === 503) {
+                const retryAfter = parseInt(err.response?.headers['retry-after'] || delay / 1000);
+                console.warn(`⚠️ [Intento ${i + 1}] Error ${status} al obtener RAM para ${deviceId}. Reintentando en ${retryAfter} segundos...`);
+                await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+            } else {
+                console.error(`❌ Error crítico obteniendo physicalMemoryInBytes para ${deviceId}:`, err.message);
+                break;
+            }
+        }
     }
+
+    // Si todos los intentos fallan
+    return 0;
 };
+
 
 
 
